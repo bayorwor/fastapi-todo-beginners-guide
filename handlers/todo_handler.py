@@ -2,39 +2,39 @@
 # Handlers hold the actual LOGIC (create, read, update, delete).
 # Routes call these functions, so routes stay short and easy to read.
 #
-# We store todos in a Python list (in memory). This is fine for learning,
-# but the data is lost every time the server restarts. Later you can swap
-# this for a real database without changing the routes.
+# Every function receives "db", a database session, and uses it to
+# read from or write to the "todos" table in MySQL.
 
 from typing import List, Optional
 
-from models.todo import Todo, TodoCreate, TodoUpdate
+from sqlalchemy.orm import Session
 
-todos: List[Todo] = []  # our "database"
-next_id = 1             # used to give each new todo a unique id
-
-
-def get_all_todos() -> List[Todo]:
-    return todos
+from models.todo import TodoCreate, TodoUpdate
+from models.todo_table import TodoTable
 
 
-def get_todo_by_id(todo_id: int) -> Optional[Todo]:
-    for todo in todos:
-        if todo.id == todo_id:
-            return todo
-    return None  # not found
+def get_all_todos(db: Session) -> List[TodoTable]:
+    # SQL: SELECT * FROM todos;
+    return db.query(TodoTable).all()
 
 
-def create_todo(data: TodoCreate) -> Todo:
-    global next_id
-    todo = Todo(id=next_id, title=data.title, description=data.description)
-    todos.append(todo)
-    next_id += 1
+def get_todo_by_id(db: Session, todo_id: int) -> Optional[TodoTable]:
+    # SQL: SELECT * FROM todos WHERE id = todo_id LIMIT 1;
+    return db.query(TodoTable).filter(TodoTable.id == todo_id).first()
+
+
+def create_todo(db: Session, data: TodoCreate) -> TodoTable:
+    # SQL: INSERT INTO todos (title, description) VALUES (...);
+    todo = TodoTable(title=data.title, description=data.description)
+    db.add(todo)      # stage the new row
+    db.commit()       # save it to MySQL
+    db.refresh(todo)  # reload it so we get the id MySQL generated
     return todo
 
 
-def update_todo(todo_id: int, data: TodoUpdate) -> Optional[Todo]:
-    todo = get_todo_by_id(todo_id)
+def update_todo(db: Session, todo_id: int, data: TodoUpdate) -> Optional[TodoTable]:
+    # SQL: UPDATE todos SET ... WHERE id = todo_id;
+    todo = get_todo_by_id(db, todo_id)
     if todo is None:
         return None
 
@@ -45,12 +45,17 @@ def update_todo(todo_id: int, data: TodoUpdate) -> Optional[Todo]:
         todo.description = data.description
     if data.completed is not None:
         todo.completed = data.completed
+
+    db.commit()
+    db.refresh(todo)
     return todo
 
 
-def delete_todo(todo_id: int) -> bool:
-    todo = get_todo_by_id(todo_id)
+def delete_todo(db: Session, todo_id: int) -> bool:
+    # SQL: DELETE FROM todos WHERE id = todo_id;
+    todo = get_todo_by_id(db, todo_id)
     if todo is None:
         return False
-    todos.remove(todo)
+    db.delete(todo)
+    db.commit()
     return True

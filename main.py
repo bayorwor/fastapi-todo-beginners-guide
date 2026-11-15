@@ -4,8 +4,13 @@
 
 from fastapi import FastAPI
 
+from configs.database import Base, engine
 from configs.settings import APP_DESCRIPTION, APP_NAME, APP_VERSION
+from models import todo_table  # noqa: F401  (imported so Base knows about the todos table)
 from routes.todo_routes import router as todo_router
+
+# Create any missing tables in MySQL (existing tables and their data are left alone)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description=APP_DESCRIPTION)
 
