@@ -9,7 +9,21 @@ You can use it in two ways:
    - **[Part 1](#part-1-build-the-api-step-by-step)**: build the API and keep todos in a Python list (in memory).
    - **[Part 2](#part-2-connect-to-a-mysql-database)**: connect it to a **MySQL database** (using Laragon, XAMPP, WAMP or Herd), so your todos are saved permanently.
 
-> The code in this repository is the **finished Part 2 version**, so it uses MySQL.
+> 📌 **You are on the `mysql-connector` branch.** The code here is the **finished Part 2 version**: it saves todos in MySQL by writing **plain SQL** with the official [`mysql-connector-python`](https://dev.mysql.com/doc/connector-python/en/) driver.
+
+### Which branch should I use?
+
+This repository has three versions of the same app, one per branch:
+
+| Branch | Where todos are stored | How it talks to the database | Good for |
+|---|---|---|---|
+| [`main`](https://github.com/bayorwor/fastapi-todo-beginners-guide/tree/main) | A Python list (in memory) | No database | Learning FastAPI on its own (Part 1 only) |
+| [`connect-db`](https://github.com/bayorwor/fastapi-todo-beginners-guide/tree/connect-db) | MySQL | **SQLAlchemy** (an ORM: Python classes write the SQL for you) | Seeing how most production FastAPI apps work |
+| **`mysql-connector`** (this one) | MySQL | **mysql-connector-python** (you write the SQL yourself) | Learning SQL and seeing exactly what is sent to the database |
+
+Switch branches with `git checkout <branch-name>`, e.g. `git checkout connect-db`. Each branch has its own README that matches its code.
+
+> 💡 Not sure? Start with `main`, then come here to add a database. Once you're comfortable with SQL, compare this branch with `connect-db` to see what an ORM does for you.
 
 By the end you will know how to:
 
@@ -19,13 +33,14 @@ By the end you will know how to:
 - Build the 5 basic API operations: **Create, Read, Update, Delete** (CRUD)
 - Return proper errors (like `404 Not Found`)
 - Keep settings and passwords in a `.env` file
-- Connect to a MySQL database and save data with SQLAlchemy
+- Connect to a MySQL database and save data by writing SQL with `mysql-connector-python`
 - Test your API with the interactive docs FastAPI builds for you
 
 ---
 
 ## Table of Contents
 
+- [Which branch should I use?](#which-branch-should-i-use)
 - [What is an API?](#what-is-an-api)
 - [Prerequisites](#prerequisites)
 - [Quick Start (run the finished project)](#quick-start-run-the-finished-project)
@@ -82,7 +97,13 @@ Each response also carries a **status code** that says how the request went:
 
 ## Quick Start (run the finished project)
 
-**1. Open a terminal in the project folder** (`todo-app`).
+**1. Get the code for this branch.** Open a terminal in the project folder (`todo-app`) and switch to the `mysql-connector` branch:
+
+```bash
+git checkout mysql-connector
+```
+
+If you're cloning fresh, you can do both at once: `git clone -b mysql-connector https://github.com/bayorwor/fastapi-todo-beginners-guide.git`.
 
 **2. Create and activate a virtual environment.** A virtual environment keeps this project's packages separate from the rest of your computer.
 
@@ -158,7 +179,7 @@ todo-app/
 ├── models/
 │   ├── __init__.py
 │   ├── todo.py              # The SHAPE of the API's data (Pydantic)
-│   └── todo_table.py        # The "todos" TABLE in MySQL (SQLAlchemy, Part 2)
+│   └── todo_table.py        # The "todos" TABLE in MySQL (SQL, Part 2)
 ├── handlers/
 │   ├── __init__.py
 │   └── todo_handler.py      # The LOGIC: create, read, update, delete (in MySQL)
@@ -194,9 +215,7 @@ This project's packages are listed in `requirements.txt`:
 fastapi
 uvicorn[standard]
 python-dotenv
-sqlalchemy
-pymysql
-cryptography
+mysql-connector-python
 ```
 
 ### At a glance
@@ -206,9 +225,7 @@ cryptography
 | `fastapi` | The web framework that turns Python functions into API endpoints | `main.py`, `routes/` | Part 1 |
 | `uvicorn[standard]` | The server that runs the app and listens for requests | the terminal (`uvicorn main:app`) | Part 1 |
 | `python-dotenv` | Reads settings from the `.env` file | `configs/settings.py` | Part 1 |
-| `sqlalchemy` | Lets you work with database tables using Python classes | `configs/database.py`, `models/todo_table.py`, `handlers/` | Part 2 |
-| `pymysql` | The driver that carries messages between Python and MySQL | `configs/database.py`, through the `mysql+pymysql` URL | Part 2 |
-| `cryptography` | Handles the secure login that MySQL 8 requires | used by `pymysql` behind the scenes | Part 2 |
+| `mysql-connector-python` | The official MySQL driver: connects to MySQL and runs our SQL | `configs/database.py`, `handlers/`, `routes/` | Part 2 |
 
 ### `fastapi`
 
@@ -273,66 +290,34 @@ APP_NAME = os.getenv("APP_NAME")  # now available through os.getenv
 
 📖 Docs: [pypi.org/project/python-dotenv](https://pypi.org/project/python-dotenv/)
 
-### `sqlalchemy`
+### `mysql-connector-python`
 
-**What it is:** an **ORM** (Object Relational Mapper) and database toolkit. It lets you describe tables as Python classes and work with rows as Python objects, instead of writing SQL by hand.
+**What it is:** the **official MySQL driver** for Python, made by Oracle (the company behind MySQL). A *driver* is the package that carries messages between Python and the database: it opens a connection, sends your SQL, and brings the results back.
 
-**Without SQLAlchemy** (raw SQL):
+**How we use it:** we write the SQL ourselves and let the driver run it.
 
 ```python
+cursor = db.cursor()
 cursor.execute("INSERT INTO todos (title) VALUES (%s)", ("Buy milk",))
-```
-
-**With SQLAlchemy:**
-
-```python
-db.add(TodoTable(title="Buy milk"))
 db.commit()
 ```
 
 **What it does for us:**
-- Defines the `todos` table (`class TodoTable(Base)`)
-- Creates the table when the app starts (`Base.metadata.create_all`)
-- Manages connections (`create_engine`) and sessions (`sessionmaker`)
-- Writes the SQL for `SELECT`, `INSERT`, `UPDATE` and `DELETE`
-
-A bonus: SQLAlchemy works with many databases (MySQL, PostgreSQL, SQLite, ...). To switch, you mostly change the connection URL and driver, not your handler code.
-
-**Where you see it:** `configs/database.py`, `models/todo_table.py`, `handlers/todo_handler.py` and `routes/todo_routes.py` (for the `Session` type).
-
-📖 Docs: [docs.sqlalchemy.org](https://docs.sqlalchemy.org/en/20/)
-
-### `pymysql`
-
-**What it is:** a MySQL **driver**, written in pure Python. SQLAlchemy knows *what* SQL to send, but it needs a driver to actually *talk* to a specific database. PyMySQL speaks MySQL's network language.
-
-> 📞 Comparison: SQLAlchemy decides what to say, PyMySQL is the phone line to MySQL.
-
-**Where you see it:** you never import it yourself. SQLAlchemy loads it because of the connection URL in `configs/database.py`:
-
-```python
-drivername="mysql+pymysql"   # database = mysql, driver = pymysql
-```
+- Opens and closes connections (`mysql.connector.connect(...)`)
+- Runs SQL through a **cursor** (`cursor.execute(...)`)
+- Returns rows as Python dicts (`db.cursor(dictionary=True)`)
+- Fills in `%s` placeholders **safely**, which protects against SQL injection
+- Handles MySQL 8's secure login (`caching_sha2_password`) by itself, so no extra package is needed
 
 It works with MySQL **and** MariaDB, so it suits all four tools in Part 2 (Laragon, XAMPP, WAMP and Herd).
 
-📖 Docs: [pymysql.readthedocs.io](https://pymysql.readthedocs.io/)
+**Where you see it:** `configs/database.py`, `handlers/todo_handler.py` and `routes/todo_routes.py` (for the `Connection` type).
 
-### `cryptography`
+> ⚠️ The package is called **`mysql-connector-python`**, but you import it as **`mysql.connector`**. There is an old, unmaintained package called `mysql-connector` (without `-python`), so double-check the name.
 
-**What it is:** a library for encryption and other security tasks.
+> 💡 **What about SQLAlchemy?** Many FastAPI projects use an **ORM** like [SQLAlchemy](https://docs.sqlalchemy.org/), which writes the SQL for you from Python classes. We write plain SQL instead, so you can see exactly what is sent to the database. Learning SQL first makes ORMs much easier to understand later.
 
-**Why we need it:** MySQL 8 logs users in with a secure method called `caching_sha2_password`. PyMySQL needs `cryptography` to handle it. Without it, connecting fails with:
-
-```text
-RuntimeError: 'cryptography' package is required for sha256_password or caching_sha2_password auth methods
-```
-
-**Where you see it:** nowhere in our code. PyMySQL uses it behind the scenes.
-
-> Some setups (like XAMPP's MariaDB with an empty password) may connect without it. Keep it installed anyway, so the project works on every machine.
-
-📖 Docs: [cryptography.io](https://cryptography.io/)
+📖 Docs: [dev.mysql.com/doc/connector-python](https://dev.mysql.com/doc/connector-python/en/)
 
 ### Working with `requirements.txt`
 
@@ -757,8 +742,9 @@ In this part we replace the Python list with a real **MySQL database**, so todos
 | **Database** | A named container inside the server, e.g. `todo_db` |
 | **Table** | Like a spreadsheet inside the database, e.g. `todos`, with **columns** (`id`, `title`, ...) and **rows** (one per todo) |
 | **SQL** | The language used to talk to databases, e.g. `SELECT * FROM todos;` |
-| **ORM** | Object Relational Mapper. It lets you work with tables using **Python classes** instead of writing SQL. We use **SQLAlchemy**, the most popular Python ORM |
-| **Driver** | The package that actually carries messages between Python and MySQL. We use **PyMySQL** |
+| **Driver** | The package that actually carries messages between Python and MySQL. We use **mysql-connector-python**, the official one |
+| **Connection** | An open line between our app and MySQL. We open one per request and close it afterwards |
+| **Cursor** | The object that runs SQL on a connection and gives back the results |
 
 **What changes compared to Part 1?**
 
@@ -767,9 +753,8 @@ In this part we replace the Python list with a real **MySQL database**, so todos
 | `.env` / `configs/settings.py` | Add the database login settings |
 | `configs/database.py` | **New:** connects to MySQL |
 | `models/todo_table.py` | **New:** describes the `todos` table |
-| `models/todo.py` | One small addition so Pydantic can read database rows |
 | `handlers/todo_handler.py` | Use the database instead of the list |
-| `routes/todo_routes.py` | Give each request a database session |
+| `routes/todo_routes.py` | Give each request a database connection |
 | `main.py` | Create the table when the app starts |
 
 ### Step 1: Install and start MySQL
@@ -840,20 +825,18 @@ CREATE DATABASE todo_db;
 mysql -u root -e "CREATE DATABASE todo_db;"
 ```
 
-### Step 3: Install the Python packages
+### Step 3: Install the Python package
 
 With your virtual environment active:
 
 ```bash
-pip install sqlalchemy pymysql cryptography
+pip install mysql-connector-python
 pip freeze > requirements.txt
 ```
 
 | Package | What it does |
 |---|---|
-| `sqlalchemy` | The ORM: lets us use Python classes instead of SQL |
-| `pymysql` | The driver that connects Python to MySQL |
-| `cryptography` | Needed by PyMySQL to log in to MySQL 8, which uses a secure login method |
+| `mysql-connector-python` | The official MySQL driver: it connects Python to MySQL and runs our SQL. It also handles MySQL 8's secure login by itself |
 
 ### Step 4: Add the database settings
 
@@ -881,41 +864,77 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "todo_db")
 ```
 
-### Step 5: Connect to MySQL (`configs/database.py`)
+### Step 5: Describe the table (`models/todo_table.py`)
+
+Create a new file, `models/todo_table.py`. It holds the SQL that creates the `todos` table. Each line inside the brackets is one **column**.
+
+```python
+# "IF NOT EXISTS" means: create the table only if it isn't there yet,
+# so restarting the app never deletes your data.
+CREATE_TODOS_TABLE = """
+CREATE TABLE IF NOT EXISTS todos (
+    id INT AUTO_INCREMENT PRIMARY KEY,      -- MySQL picks the next number for us
+    title VARCHAR(255) NOT NULL,            -- required, max 255 characters
+    description TEXT NULL,                  -- optional, long text allowed
+    completed BOOLEAN NOT NULL DEFAULT FALSE
+)
+"""
+```
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | `INT AUTO_INCREMENT PRIMARY KEY` | A whole number that MySQL fills in (1, 2, 3, ...). It uniquely identifies each row |
+| `title` | `VARCHAR(255) NOT NULL` | Text up to 255 characters. `NOT NULL` makes it required |
+| `description` | `TEXT NULL` | Longer text. `NULL` makes it optional |
+| `completed` | `BOOLEAN NOT NULL DEFAULT FALSE` | True or false. Starts as false if we don't say otherwise |
+
+> 💡 **Two kinds of model, two jobs.** It's easy to mix these up:
+>
+> | File | Written in | Describes |
+> |---|---|---|
+> | `models/todo.py` | Python (Pydantic) | What the **API** receives and sends (JSON) |
+> | `models/todo_table.py` | SQL | What is stored in the **database** (table and columns) |
+
+### Step 6: Connect to MySQL (`configs/database.py`)
 
 Create a new file, `configs/database.py`. This is the only file that knows *how* to connect to MySQL.
 
 ```python
-from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
-from sqlalchemy.orm import declarative_base, sessionmaker
+import mysql.connector
+# "Connection" is a short name for "a MySQL connection", used in type hints across the app
+from mysql.connector.abstracts import MySQLConnectionAbstract as Connection
 
 from configs.settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
+from models.todo_table import CREATE_TODOS_TABLE
 
-# Build the connection address, e.g. mysql+pymysql://root:@127.0.0.1:3306/todo_db
-# URL.create safely handles special characters (like @ or #) in the password.
-DATABASE_URL = URL.create(
-    drivername="mysql+pymysql",  # MySQL, using the PyMySQL driver
-    username=DB_USER,
-    password=DB_PASSWORD,
-    host=DB_HOST,
-    port=DB_PORT,
-    database=DB_NAME,
-)
 
-# pool_pre_ping checks the connection is still alive before using it
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-
-Base = declarative_base()
+def get_connection() -> Connection:
+    """Open a new connection to the MySQL database."""
+    return mysql.connector.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+    )
 
 
 def get_db():
-    """Open a database session for one request, and always close it afterwards."""
-    db = SessionLocal()
+    """Open a database connection for one request, and always close it afterwards."""
+    db = get_connection()
     try:
         yield db
+    finally:
+        db.close()
+
+
+def create_tables() -> None:
+    """Create any missing tables (existing tables and their data are left alone)."""
+    db = get_connection()
+    try:
+        cursor = db.cursor()
+        cursor.execute(CREATE_TODOS_TABLE)
+        cursor.close()
     finally:
         db.close()
 ```
@@ -924,144 +943,125 @@ def get_db():
 
 | Code | What it means |
 |---|---|
-| `DATABASE_URL` | The "address" of the database: which driver, login, host, port and database name |
-| `engine` | The actual connection to MySQL, created once and shared by the whole app |
-| `SessionLocal` | A factory that makes **sessions**. A session is one "conversation" with the database |
-| `Base` | The parent class every table model inherits from |
-| `get_db()` | Opens a session for a request and **always closes it** afterwards, even if an error happens. `yield` hands the session to the route and waits until the request is done |
+| `mysql.connector.connect(...)` | Logs in to MySQL with our settings and returns a **connection**: an open line to the database |
+| `Connection` | The *type* of a connection object. We only use it in type hints, like `db: Connection` |
+| `get_connection()` | Opens a new connection. Used by `get_db()` and `create_tables()` |
+| `get_db()` | Opens a connection for a request and **always closes it** afterwards, even if an error happens. `yield` hands the connection to the route and waits until the request is done |
+| `create_tables()` | Runs our `CREATE TABLE IF NOT EXISTS` SQL once, when the app starts |
 
-### Step 6: Describe the table (`models/todo_table.py`)
+### Step 7: Use the database in the handlers (`handlers/todo_handler.py`)
 
-Create a new file, `models/todo_table.py`. Each class attribute becomes a **column** in the `todos` table.
-
-```python
-from sqlalchemy import Boolean, Column, Integer, String, Text
-
-from configs.database import Base
-
-
-class TodoTable(Base):
-    __tablename__ = "todos"  # the table name in MySQL
-
-    id = Column(Integer, primary_key=True, index=True)  # MySQL auto-increments this
-    title = Column(String(255), nullable=False)          # required, max 255 characters
-    description = Column(Text, nullable=True)            # optional, long text allowed
-    completed = Column(Boolean, default=False, nullable=False)
-```
-
-> 💡 **Two kinds of model, two jobs.** It's easy to mix these up:
->
-> | File | Library | Describes |
-> |---|---|---|
-> | `models/todo.py` | Pydantic | What the **API** receives and sends (JSON) |
-> | `models/todo_table.py` | SQLAlchemy | What is stored in the **database** (table and columns) |
-
-### Step 7: Let Pydantic read database rows (`models/todo.py`)
-
-Our handlers will now return `TodoTable` objects instead of Pydantic `Todo` objects. To let FastAPI turn them into JSON, add **one line** to the `Todo` class and update the import:
-
-```python
-from pydantic import BaseModel, ConfigDict
-
-# ... TodoCreate and TodoUpdate stay the same ...
-
-
-class Todo(BaseModel):
-    """A full todo item, as the API returns it."""
-    # Lets Pydantic read data straight from a database row (a TodoTable object)
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    title: str
-    description: Optional[str] = None
-    completed: bool = False
-```
-
-### Step 8: Use the database in the handlers (`handlers/todo_handler.py`)
-
-Replace the whole file. Each function now receives `db`, a database session. The comments show the SQL that SQLAlchemy writes for you.
+Replace the whole file. Each function now receives `db`, a database connection, and runs SQL through a **cursor**.
 
 ```python
 from typing import List, Optional
 
-from sqlalchemy.orm import Session
-
+from configs.database import Connection
 from models.todo import TodoCreate, TodoUpdate
-from models.todo_table import TodoTable
 
 
-def get_all_todos(db: Session) -> List[TodoTable]:
-    # SQL: SELECT * FROM todos;
-    return db.query(TodoTable).all()
+def get_all_todos(db: Connection) -> List[dict]:
+    # dictionary=True returns each row as a dict, e.g. {"id": 1, "title": "..."}
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT id, title, description, completed FROM todos")
+    todos = cursor.fetchall()
+    cursor.close()
+    return todos
 
 
-def get_todo_by_id(db: Session, todo_id: int) -> Optional[TodoTable]:
-    # SQL: SELECT * FROM todos WHERE id = todo_id LIMIT 1;
-    return db.query(TodoTable).filter(TodoTable.id == todo_id).first()
-
-
-def create_todo(db: Session, data: TodoCreate) -> TodoTable:
-    # SQL: INSERT INTO todos (title, description) VALUES (...);
-    todo = TodoTable(title=data.title, description=data.description)
-    db.add(todo)      # stage the new row
-    db.commit()       # save it to MySQL
-    db.refresh(todo)  # reload it so we get the id MySQL generated
+def get_todo_by_id(db: Connection, todo_id: int) -> Optional[dict]:
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, title, description, completed FROM todos WHERE id = %s",
+        (todo_id,),  # the comma makes this a tuple with one value
+    )
+    todo = cursor.fetchone()  # one row, or None if nothing matched
+    cursor.close()
     return todo
 
 
-def update_todo(db: Session, todo_id: int, data: TodoUpdate) -> Optional[TodoTable]:
-    # SQL: UPDATE todos SET ... WHERE id = todo_id;
+def create_todo(db: Connection, data: TodoCreate) -> dict:
+    cursor = db.cursor()
+    cursor.execute(
+        "INSERT INTO todos (title, description) VALUES (%s, %s)",
+        (data.title, data.description),
+    )
+    db.commit()                  # save it to MySQL
+    new_id = cursor.lastrowid    # the id MySQL generated for the new row
+    cursor.close()
+    return get_todo_by_id(db, new_id)
+
+
+def update_todo(db: Connection, todo_id: int, data: TodoUpdate) -> Optional[dict]:
     todo = get_todo_by_id(db, todo_id)
     if todo is None:
         return None
 
-    # Only change the fields the client actually sent
-    if data.title is not None:
-        todo.title = data.title
-    if data.description is not None:
-        todo.description = data.description
-    if data.completed is not None:
-        todo.completed = data.completed
+    # Only change the fields the client actually sent; keep the rest as they are
+    title = data.title if data.title is not None else todo["title"]
+    description = data.description if data.description is not None else todo["description"]
+    completed = data.completed if data.completed is not None else todo["completed"]
 
+    cursor = db.cursor()
+    cursor.execute(
+        "UPDATE todos SET title = %s, description = %s, completed = %s WHERE id = %s",
+        (title, description, completed, todo_id),
+    )
     db.commit()
-    db.refresh(todo)
-    return todo
+    cursor.close()
+    return get_todo_by_id(db, todo_id)
 
 
-def delete_todo(db: Session, todo_id: int) -> bool:
-    # SQL: DELETE FROM todos WHERE id = todo_id;
-    todo = get_todo_by_id(db, todo_id)
-    if todo is None:
-        return False
-    db.delete(todo)
+def delete_todo(db: Connection, todo_id: int) -> bool:
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM todos WHERE id = %s", (todo_id,))
     db.commit()
-    return True
+    deleted = cursor.rowcount > 0  # rowcount = how many rows were deleted
+    cursor.close()
+    return deleted
 ```
 
 Notice that the `todos` list and the `next_id` counter are gone. MySQL now stores the todos and generates the ids.
 
-**The session methods you'll use most:**
+The handlers return plain **dicts** like `{"id": 1, "title": "Buy milk", ...}`. FastAPI checks them against `response_model=Todo` and turns them into JSON, so `models/todo.py` doesn't need to change.
+
+**The connection and cursor methods you'll use most:**
 
 | Method | What it does |
 |---|---|
-| `db.query(TodoTable).all()` | Get every row |
-| `db.query(TodoTable).filter(...).first()` | Get the first row that matches, or `None` |
-| `db.add(obj)` | Mark a new object to be saved |
-| `db.commit()` | **Save all changes** to the database. Nothing is saved until you commit! |
-| `db.refresh(obj)` | Reload the object from the database (e.g. to get its new `id`) |
-| `db.delete(obj)` | Mark a row to be deleted (saved on `commit`) |
+| `db.cursor(dictionary=True)` | Create a cursor that returns rows as dicts (without `dictionary=True` you get tuples) |
+| `cursor.execute(sql, values)` | Run one SQL statement. `values` fills in the `%s` placeholders, in order |
+| `cursor.fetchall()` | Get every row the query returned, as a list |
+| `cursor.fetchone()` | Get the next row, or `None` if there are no more |
+| `cursor.lastrowid` | The `id` MySQL generated for the row you just inserted |
+| `cursor.rowcount` | How many rows the last `UPDATE` or `DELETE` changed |
+| `db.commit()` | **Save the changes** to the database. `INSERT`, `UPDATE` and `DELETE` are not saved until you commit! |
+| `cursor.close()` | Free the cursor when you're done with it |
 
-### Step 9: Give each request a session (`routes/todo_routes.py`)
+> ⚠️ **Never build SQL with f-strings.** This is dangerous:
+>
+> ```python
+> cursor.execute(f"SELECT * FROM todos WHERE id = {todo_id}")  # ❌ don't do this
+> ```
+>
+> If the value comes from a user, they could inject their own SQL (this is called **SQL injection**). Always use `%s` placeholders and pass the values separately, as in the code above. The driver then escapes them safely.
+>
+> ```python
+> cursor.execute("SELECT * FROM todos WHERE id = %s", (todo_id,))  # ✅ safe
+> ```
+>
+> `%s` is used for **every** type (text, numbers, booleans), not just strings.
 
-Every route gets a new argument, `db: Session = Depends(get_db)`, and passes `db` to the handler. Here is the full file:
+### Step 8: Give each request a connection (`routes/todo_routes.py`)
+
+Every route gets a new argument, `db: Connection = Depends(get_db)`, and passes `db` to the handler. Here is the full file:
 
 ```python
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 
-from configs.database import get_db
+from configs.database import Connection, get_db
 from constant.messages import TODO_DELETED, TODO_NOT_FOUND
 from handlers import todo_handler
 from models.todo import Todo, TodoCreate, TodoUpdate
@@ -1069,19 +1069,19 @@ from models.todo import Todo, TodoCreate, TodoUpdate
 # Every route in this file will start with /todos
 router = APIRouter(prefix="/todos", tags=["Todos"])
 
-# "db: Session = Depends(get_db)" asks FastAPI to open a database session
+# "db: Connection = Depends(get_db)" asks FastAPI to open a database connection
 # for each request and pass it in. FastAPI closes it when the request ends.
 
 
 # GET /todos  -> list all todos
 @router.get("/", response_model=List[Todo])
-def list_todos(db: Session = Depends(get_db)):
+def list_todos(db: Connection = Depends(get_db)):
     return todo_handler.get_all_todos(db)
 
 
 # GET /todos/1  -> get one todo by its id
 @router.get("/{todo_id}", response_model=Todo)
-def get_todo(todo_id: int, db: Session = Depends(get_db)):
+def get_todo(todo_id: int, db: Connection = Depends(get_db)):
     todo = todo_handler.get_todo_by_id(db, todo_id)
     if todo is None:
         raise HTTPException(status_code=404, detail=TODO_NOT_FOUND)
@@ -1090,13 +1090,13 @@ def get_todo(todo_id: int, db: Session = Depends(get_db)):
 
 # POST /todos  -> create a new todo (201 = "Created")
 @router.post("/", response_model=Todo, status_code=201)
-def create_todo(data: TodoCreate, db: Session = Depends(get_db)):
+def create_todo(data: TodoCreate, db: Connection = Depends(get_db)):
     return todo_handler.create_todo(db, data)
 
 
 # PUT /todos/1  -> update an existing todo
 @router.put("/{todo_id}", response_model=Todo)
-def update_todo(todo_id: int, data: TodoUpdate, db: Session = Depends(get_db)):
+def update_todo(todo_id: int, data: TodoUpdate, db: Connection = Depends(get_db)):
     todo = todo_handler.update_todo(db, todo_id, data)
     if todo is None:
         raise HTTPException(status_code=404, detail=TODO_NOT_FOUND)
@@ -1105,28 +1105,27 @@ def update_todo(todo_id: int, data: TodoUpdate, db: Session = Depends(get_db)):
 
 # DELETE /todos/1  -> delete a todo
 @router.delete("/{todo_id}")
-def delete_todo(todo_id: int, db: Session = Depends(get_db)):
+def delete_todo(todo_id: int, db: Connection = Depends(get_db)):
     if not todo_handler.delete_todo(db, todo_id):
         raise HTTPException(status_code=404, detail=TODO_NOT_FOUND)
     return {"message": TODO_DELETED}
 ```
 
-> 💡 **What is `Depends`?** It's FastAPI's **dependency injection**. Instead of opening and closing a database session inside every route, you tell FastAPI "this route *depends on* `get_db`". FastAPI then calls `get_db()` for you, passes the session in, and cleans up afterwards.
+> 💡 **What is `Depends`?** It's FastAPI's **dependency injection**. Instead of opening and closing a database connection inside every route, you tell FastAPI "this route *depends on* `get_db`". FastAPI then calls `get_db()` for you, passes the connection in, and cleans up afterwards.
 
-### Step 10: Create the table on startup (`main.py`)
+### Step 9: Create the table on startup (`main.py`)
 
-Add three lines to `main.py`:
+Add two lines to `main.py`:
 
 ```python
 from fastapi import FastAPI
 
-from configs.database import Base, engine
+from configs.database import create_tables
 from configs.settings import APP_DESCRIPTION, APP_NAME, APP_VERSION
-from models import todo_table  # noqa: F401  (imported so Base knows about the todos table)
 from routes.todo_routes import router as todo_router
 
 # Create any missing tables in MySQL (existing tables and their data are left alone)
-Base.metadata.create_all(bind=engine)
+create_tables()
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description=APP_DESCRIPTION)
 
@@ -1139,10 +1138,9 @@ def home():
     return {"message": f"Welcome to the {APP_NAME}! Visit /docs to try the API."}
 ```
 
-- `Base.metadata.create_all(...)` looks at every class that inherits from `Base` and creates its table **if it doesn't exist yet**.
-- `from models import todo_table` makes sure Python loads the `TodoTable` class before `create_all` runs. Without it, `Base` wouldn't know the table exists. (`# noqa: F401` just tells code checkers the import is intentional.)
+`create_tables()` runs our `CREATE TABLE IF NOT EXISTS todos ...` SQL once, when the server starts. If the table already exists, MySQL leaves it (and your data) alone.
 
-### Step 11: Run it and check MySQL 🚀
+### Step 10: Run it and check MySQL 🚀
 
 1. Make sure MySQL is running in Laragon, XAMPP, WAMP or Herd.
 2. Start the API:
@@ -1165,7 +1163,7 @@ The table MySQL created looks like this (`DESCRIBE todos;`):
 | `description` | text | YES | | |
 | `completed` | tinyint(1) | NO | | |
 
-> MySQL has no real boolean type, so `completed` is stored as `tinyint(1)`: `0` for false, `1` for true. SQLAlchemy converts it back to `True`/`False` for you.
+> MySQL has no real boolean type, so `BOOLEAN` is stored as `tinyint(1)`: `0` for false, `1` for true. The driver gives us `0` or `1`, and Pydantic's `completed: bool` turns it back into `false`/`true` in the JSON response.
 
 ---
 
@@ -1230,10 +1228,10 @@ curl -X DELETE http://127.0.0.1:8000/todos/1
 | **Response model** | `response_model=Todo` | The shape of the data you send back |
 | **Status code** | `status_code=201` | Tells the client what happened |
 | **HTTPException** | `raise HTTPException(404, "...")` | Returns an error response |
-| **Engine** | `create_engine(DATABASE_URL)` | The connection to the database |
-| **Session** | `db: Session` | One "conversation" with the database; changes are saved on `db.commit()` |
-| **Table model** | `class TodoTable(Base)` | A Python class that maps to a database table |
-| **Dependency** | `db: Session = Depends(get_db)` | FastAPI runs `get_db()` and passes the result into the route |
+| **Connection** | `mysql.connector.connect(...)` | An open line to the database; changes are saved on `db.commit()` |
+| **Cursor** | `cursor = db.cursor(dictionary=True)` | Runs SQL and returns the rows |
+| **Placeholder** | `cursor.execute("... WHERE id = %s", (todo_id,))` | Passes values into SQL safely (prevents SQL injection) |
+| **Dependency** | `db: Connection = Depends(get_db)` | FastAPI runs `get_db()` and passes the result into the route |
 
 ---
 
@@ -1255,14 +1253,15 @@ curl -X DELETE http://127.0.0.1:8000/todos/1
 
 | Error | Cause | Fix |
 |---|---|---|
-| `(2003, "Can't connect to MySQL server on '127.0.0.1' ...")` | MySQL isn't running, or is on a different port | Start MySQL in Laragon / XAMPP / WAMP / Herd. Check `DB_PORT` in `.env` (WAMP's MySQL is often `3308`) |
-| `(1049, "Unknown database 'todo_db'")` | The database hasn't been created | Run `CREATE DATABASE todo_db;` ([Part 2, Step 2](#step-2-create-the-database)) |
-| `(1045, "Access denied for user 'root'@'localhost'")` | Wrong user or password | Check `DB_USER` and `DB_PASSWORD` in `.env`, then restart the server |
-| `'cryptography' package is required for sha256_password or caching_sha2_password auth methods` | MySQL 8 uses a secure login method | `pip install cryptography` |
-| `ModuleNotFoundError: No module named 'pymysql'` | Driver not installed | `pip install pymysql` |
+| `2003 (HY000): Can't connect to MySQL server on '127.0.0.1:3306'` | MySQL isn't running, or is on a different port | Start MySQL in Laragon / XAMPP / WAMP / Herd. Check `DB_PORT` in `.env` (WAMP's MySQL is often `3308`) |
+| `1049 (42000): Unknown database 'todo_db'` | The database hasn't been created | Run `CREATE DATABASE todo_db;` ([Part 2, Step 2](#step-2-create-the-database)) |
+| `1045 (28000): Access denied for user 'root'@'localhost'` | Wrong user or password | Check `DB_USER` and `DB_PASSWORD` in `.env`, then restart the server |
+| `ModuleNotFoundError: No module named 'mysql'` | Driver not installed | `pip install mysql-connector-python` (the package name ends in `-python`) |
+| `1064 (42000): You have an error in your SQL syntax` | A typo in one of your SQL strings | Read the part of the message after `near '...'`, which shows where MySQL got confused. Try the SQL in HeidiSQL or phpMyAdmin first |
 | MySQL won't start: "port 3306 in use" | Another MySQL (e.g. XAMPP *and* Laragon) is already running | Stop MySQL in the other tool first |
-| Added a new column to `TodoTable` but MySQL doesn't have it (`Unknown column ...`) | `create_all` only creates **missing tables**; it never changes existing ones | While learning: drop the table (`DROP TABLE todos;`) and restart the server to recreate it. **This deletes its data.** Later, use Alembic (see [Next Steps](#next-steps)) |
-| `ResponseValidationError` when returning a todo | `Todo` model can't read the database object | Make sure `model_config = ConfigDict(from_attributes=True)` is in the `Todo` class |
+| Added a new column to `CREATE_TODOS_TABLE` but MySQL doesn't have it (`Unknown column ...`) | `CREATE TABLE IF NOT EXISTS` only creates **missing tables**; it never changes existing ones | While learning: drop the table (`DROP TABLE todos;`) and restart the server to recreate it. **This deletes its data.** Later, use Alembic (see [Next Steps](#next-steps)) |
+| `ResponseValidationError` when returning a todo | The handler returned something that doesn't match `Todo` | Use `db.cursor(dictionary=True)` so rows are dicts, and make sure your `SELECT` includes every field in `Todo` |
+| Data disappears or doesn't show up in MySQL | `db.commit()` was not called after `INSERT` / `UPDATE` / `DELETE` | Add `db.commit()` after the `cursor.execute(...)` |
 
 ---
 
@@ -1272,10 +1271,10 @@ The best way to learn is to build. Try these, in order of difficulty.
 
 ### 🟢 Easy: extend the Todo API
 
-1. Add a `priority` field (`"low"`, `"medium"`, `"high"`) to the todo models. Remember to add it to **both** `models/todo.py` and `models/todo_table.py`, then drop and recreate the table (see [Database errors](#database-errors-part-2)).
+1. Add a `priority` field (`"low"`, `"medium"`, `"high"`) to the todo models. Remember to add it to **both** `models/todo.py` and the SQL in `models/todo_table.py` (and to the `SELECT`, `INSERT` and `UPDATE` queries), then drop and recreate the table (see [Database errors](#database-errors-part-2)).
 2. Add a query parameter so `GET /todos/?completed=true` returns only completed todos.
-   *Hint: add `completed: Optional[bool] = None` as a function argument in the route, and use `.filter(TodoTable.completed == completed)` in the handler.*
-3. Add a `DELETE /todos/` endpoint that clears all todos. *Hint: `db.query(TodoTable).delete()` then `db.commit()`.*
+   *Hint: add `completed: Optional[bool] = None` as a function argument in the route, and add `WHERE completed = %s` to the `SELECT` in the handler when it isn't `None`.*
+3. Add a `DELETE /todos/` endpoint that clears all todos. *Hint: `cursor.execute("DELETE FROM todos")` then `db.commit()`.*
 
 ### 🟡 Medium: build a new API with the same structure
 
@@ -1283,27 +1282,28 @@ Use this project as a template and build a **Book Library API**:
 
 | Folder | What to create |
 |---|---|
-| `models/book.py` | `BookCreate` (title, author, year), `BookUpdate`, `Book` (with `from_attributes=True`) |
-| `models/book_table.py` | `BookTable` with `__tablename__ = "books"` |
-| `handlers/book_handler.py` | CRUD functions using `db: Session` |
+| `models/book.py` | `BookCreate` (title, author, year), `BookUpdate`, `Book` |
+| `models/book_table.py` | `CREATE_BOOKS_TABLE`, the SQL for a `books` table |
+| `handlers/book_handler.py` | CRUD functions using `db: Connection` and SQL |
 | `routes/book_routes.py` | A router with `prefix="/books"` |
 | `constant/messages.py` | `BOOK_NOT_FOUND`, `BOOK_DELETED` |
-| `main.py` | `from models import book_table` and `app.include_router(book_router)` |
+| `configs/database.py` | Run `CREATE_BOOKS_TABLE` in `create_tables()` too |
+| `main.py` | `app.include_router(book_router)` |
 
 **The recipe for any new resource** (books, notes, contacts, products and so on):
 
 1. **API model** (Pydantic): what does one item look like? What do you need to create it? To update it?
-2. **Table model** (SQLAlchemy): which columns does the table need?
-3. **Handler**: write `get_all`, `get_by_id`, `create`, `update` and `delete` functions using `db`.
-4. **Routes**: connect each handler function to a URL and HTTP method, with `db: Session = Depends(get_db)`.
-5. **Register**: import the table model and add `app.include_router(...)` in `main.py`.
+2. **Table** (SQL): which columns does the table need? Write the `CREATE TABLE IF NOT EXISTS` statement.
+3. **Handler**: write `get_all`, `get_by_id`, `create`, `update` and `delete` functions that run SQL on `db`.
+4. **Routes**: connect each handler function to a URL and HTTP method, with `db: Connection = Depends(get_db)`.
+5. **Register**: run the new table's SQL in `create_tables()` and add `app.include_router(...)` in `main.py`.
 
 ### 🔴 Harder
 
 - Put **both** Todos and Books in the same app (two routers).
 - Add validation, e.g. `title` must be at least 3 characters (look up Pydantic's `Field(min_length=3)`).
-- Add a `created_at` timestamp to each todo. *Hint: `Column(DateTime, server_default=func.now())` lets MySQL fill it in.*
-- Add an `author_id` to books and an `authors` table, then link them with a `ForeignKey`.
+- Add a `created_at` timestamp to each todo. *Hint: the column `created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP` lets MySQL fill it in.*
+- Add an `author_id` to books and an `authors` table, then link them with a `FOREIGN KEY` and fetch both with a `JOIN`.
 
 ---
 
@@ -1311,18 +1311,21 @@ Use this project as a template and build a **Book Library API**:
 
 When you are comfortable with this project, here is what to learn next:
 
-1. **Database migrations.** Use [Alembic](https://alembic.sqlalchemy.org/) to change tables (add columns, etc.) without deleting your data.
-2. **Automated tests.** Use `pytest` with FastAPI's `TestClient`.
-3. **Typed settings.** Swap `python-dotenv` for `pydantic-settings`, which validates and converts `.env` values (e.g. strings to `int`/`bool`) for you.
-4. **Authentication.** Protect endpoints with login and tokens (see the FastAPI security tutorial).
-5. **Deployment.** Put your API online with Render, Railway or Docker.
+1. **Changing tables safely.** Learn `ALTER TABLE` (e.g. `ALTER TABLE todos ADD COLUMN priority VARCHAR(10);`) to change a table without deleting its data.
+2. **Connection pooling.** Opening a new connection for every request is simple but slow under heavy traffic. `mysql.connector.pooling.MySQLConnectionPool` keeps a few connections open and reuses them.
+3. **An ORM.** Once you're comfortable with SQL, try [SQLAlchemy](https://docs.sqlalchemy.org/en/20/orm/quickstart.html), which writes the SQL for you from Python classes, and [Alembic](https://alembic.sqlalchemy.org/) for database migrations.
+4. **Automated tests.** Use `pytest` with FastAPI's `TestClient`.
+5. **Typed settings.** Swap `python-dotenv` for `pydantic-settings`, which validates and converts `.env` values (e.g. strings to `int`/`bool`) for you.
+6. **Authentication.** Protect endpoints with login and tokens (see the FastAPI security tutorial).
+7. **Deployment.** Put your API online with Render, Railway or Docker.
 
 ### Useful Resources
 
 - [Official FastAPI Tutorial](https://fastapi.tiangolo.com/tutorial/), which is excellent and beginner friendly
 - [Pydantic Documentation](https://docs.pydantic.dev/)
 - [FastAPI: SQL Databases](https://fastapi.tiangolo.com/tutorial/sql-databases/)
-- [SQLAlchemy ORM Quick Start](https://docs.sqlalchemy.org/en/20/orm/quickstart.html)
+- [MySQL Connector/Python Developer Guide](https://dev.mysql.com/doc/connector-python/en/)
+- [MySQL Tutorial (official)](https://dev.mysql.com/doc/refman/8.0/en/tutorial.html)
 - [HTTP Status Codes Explained (MDN)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)
 
 ---

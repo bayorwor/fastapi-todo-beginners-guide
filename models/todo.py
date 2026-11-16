@@ -4,7 +4,7 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class TodoCreate(BaseModel):
@@ -23,9 +23,6 @@ class TodoUpdate(BaseModel):
 
 class Todo(BaseModel):
     """A full todo item, as the API returns it."""
-    # Lets Pydantic read data straight from a database row (a TodoTable object)
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     title: str
     description: Optional[str] = None

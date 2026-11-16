@@ -5,9 +5,8 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 
-from configs.database import get_db
+from configs.database import Connection, get_db
 from constant.messages import TODO_DELETED, TODO_NOT_FOUND
 from handlers import todo_handler
 from models.todo import Todo, TodoCreate, TodoUpdate
@@ -15,19 +14,19 @@ from models.todo import Todo, TodoCreate, TodoUpdate
 # Every route in this file will start with /todos
 router = APIRouter(prefix="/todos", tags=["Todos"])
 
-# "db: Session = Depends(get_db)" asks FastAPI to open a database session
+# "db: Connection = Depends(get_db)" asks FastAPI to open a database connection
 # for each request and pass it in. FastAPI closes it when the request ends.
 
 
 # GET /todos  -> list all todos
 @router.get("/", response_model=List[Todo])
-def list_todos(db: Session = Depends(get_db)):
+def list_todos(db: Connection = Depends(get_db)):
     return todo_handler.get_all_todos(db)
 
 
 # GET /todos/1  -> get one todo by its id
 @router.get("/{todo_id}", response_model=Todo)
-def get_todo(todo_id: int, db: Session = Depends(get_db)):
+def get_todo(todo_id: int, db: Connection = Depends(get_db)):
     todo = todo_handler.get_todo_by_id(db, todo_id)
     if todo is None:
         raise HTTPException(status_code=404, detail=TODO_NOT_FOUND)
@@ -36,13 +35,13 @@ def get_todo(todo_id: int, db: Session = Depends(get_db)):
 
 # POST /todos  -> create a new todo (201 = "Created")
 @router.post("/", response_model=Todo, status_code=201)
-def create_todo(data: TodoCreate, db: Session = Depends(get_db)):
+def create_todo(data: TodoCreate, db: Connection = Depends(get_db)):
     return todo_handler.create_todo(db, data)
 
 
 # PUT /todos/1  -> update an existing todo
 @router.put("/{todo_id}", response_model=Todo)
-def update_todo(todo_id: int, data: TodoUpdate, db: Session = Depends(get_db)):
+def update_todo(todo_id: int, data: TodoUpdate, db: Connection = Depends(get_db)):
     todo = todo_handler.update_todo(db, todo_id, data)
     if todo is None:
         raise HTTPException(status_code=404, detail=TODO_NOT_FOUND)
@@ -51,7 +50,7 @@ def update_todo(todo_id: int, data: TodoUpdate, db: Session = Depends(get_db)):
 
 # DELETE /todos/1  -> delete a todo
 @router.delete("/{todo_id}")
-def delete_todo(todo_id: int, db: Session = Depends(get_db)):
+def delete_todo(todo_id: int, db: Connection = Depends(get_db)):
     if not todo_handler.delete_todo(db, todo_id):
         raise HTTPException(status_code=404, detail=TODO_NOT_FOUND)
     return {"message": TODO_DELETED}
